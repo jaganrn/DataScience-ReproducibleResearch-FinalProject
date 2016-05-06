@@ -1,0 +1,112 @@
+## Data Science: Reproducible Research - Final Project
+
+### **Title:** Most harmful Weather Events on Population Health and Economy in the United States
+
+#### **Synopsis** 
+
+The aim of this report is to analyze impact of different weather events on United States population health & economy. This analysis is done exploration of the Storm database collected from the U.S. National Oceanic and Atmospheric Administration's (NOAA).
+
+In this report, we aim to analyze the impact of different weather events on public health and economy based on the storm database collected from the U.S. National Oceanic and Atmospheric Administration's (NOAA) from 1950 - 2011. We will use the estimates of fatalities, injuries, property and crop damage to decide which types of events are most impactful to the U.S. population health and economy. Analysis indicate tornado and excessive heat are most impactful with respect to population health. Similarly flood, hurricane/typhoon, tornado, and storm surge have the highest impact on the economy
+
+#### **Data Processing**
+
+The storm data should be downloaded if it's not present already in the data directory. Storm data is available at <a href="https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2">this location</a>
+
+```{r}
+echo = TRUE 
+cache = TRUE 
+setwd("/Users/jagan/work/DataScience/ReproducibleResearch/DataScience-ReproducibleResearch-FinalProject")
+if (!file.exists("data/StormData.csv.bz2")) {
+    dir.create("data", showWarnings = FALSE) #ignore Warning to recreate the directory
+    fileUrl <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+    download.file(fileUrl, destfile = "data/stormData.csv.bz2")
+}
+```
+
+As the file is compressed with bzip2 (extension .bz2) it can be read by read.csv without having to uncompress so that disk space is saved and also reading too much data from disk is avoided
+
+```{r}
+stormData <- read.csv("data/stormData.csv.bz2")
+dim(stormData)
+names(stormData)
+head(stormData, n = 2)
+head(stormData$BGN_DATE, n=1)
+tail(stormData$BGN_DATE, n=1)
+```
+
+We can see that totally 902297 rows with each row having 37 columns. Events are captured between 4/18/1950 and 11/28/2011. As the goal is to estimate the health and economy impacts only relevant fields are extracted. The fields being extracted are **EVTYPE**, **FATALITIES**, **INJURIES**, **PROPDMG**, **PROPDMGEXP**, **CROPDMG**, **CROPDMGEXP**. Also based on the information available <a href="http://ire.org/media/uploads/files/datalibrary/samplefiles/Storm%20Events/layout08.doc">Storm Schema</a> the PROPDMGEXP is used as an unit to multiply the value of PROPDMG and similarly CORPDMGEXP is used for getting the CROPDMG in same units (USD)
+
+There are very few PROPDMGEXP values which are numeric and for such scenarios no special treatment is done as there is no explanation on how to handle such values. The values being handled are EMPTY string, K, m, M, B. For EMPTY & other PROPDMGEXP scenarios PROPDMG is used as-is. Similar rules are applied for CROPDMGEXP too while deriving an absolute value of CROPDMG
+
+Its also observed that there are no NA values for any of these fields and hence we don't need to ignore any NA values
+
+```{r}
+# capture only relevant fields for our analysis
+stormData <- stormData[ , c("EVTYPE", "FATALITIES", "INJURIES", "PROPDMG", "PROPDMGEXP", "CROPDMG", "CROPDMGEXP")]
+
+# convert the Property Damage value into common denomination (USD)
+stormData$PROPDMG[stormData$PROPDMGEXP==""] <- stormData$PROPDMG[stormData$PROPDMGEXP==""]
+stormData$PROPDMG[toupper(stormData$PROPDMGEXP)=="H"] <- stormData$PROPDMG[toupper(stormData$PROPDMGEXP)=="H"]*1e2
+stormData$PROPDMG[toupper(stormData$PROPDMGEXP)=="K"] <- stormData$PROPDMG[toupper(stormData$PROPDMGEXP)=="K"]*1e3
+stormData$PROPDMG[toupper(stormData$PROPDMGEXP)=="M"] <- stormData$PROPDMG[toupper(stormData$PROPDMGEXP)=="M"]*1e6
+stormData$PROPDMG[toupper(stormData$PROPDMGEXP)=="B"] <- stormData$PROPDMG[toupper(stormData$PROPDMGEXP)=="B"]*1e9
+
+# convert the Crop Damage value into common denomination (USD)
+stormData$CROPDMG[stormData$CROPDMGEXP==""] <- stormData$CROPDMG[stormData$CROPDMGEXP==""]
+stormData$CROPDMG[toupper(stormData$CROPDMGEXP)=="H"] <- stormData$CROPDMG[toupper(stormData$CROPDMGEXP)=="H"]*1e2
+stormData$CROPDMG[toupper(stormData$CROPDMGEXP)=="K"] <- stormData$CROPDMG[toupper(stormData$CROPDMGEXP)=="K"]*1e3
+stormData$CROPDMG[toupper(stormData$CROPDMGEXP)=="M"] <- stormData$CROPDMG[toupper(stormData$CROPDMGEXP)=="M"]*1e6
+stormData$CROPDMG[toupper(stormData$CROPDMGEXP)=="B"] <- stormData$CROPDMG[toupper(stormData$CROPDMGEXP)=="B"]*1e9
+```
+
+##### Impact on Population Health
+In this we generate the top 10 weather events that resulted in high number of fatalities and injuries
+
+```{r}
+# generate the top 10 health impacting events
+healthImpact <- aggregate(cbind(FATALITIES, INJURIES) ~ EVTYPE, stormData, sum, na.rm = TRUE)
+healthImpact$TOTAL <- with(healthImpact, FATALITIES + INJURIES)
+top10HealthImpacts <- head(healthImpact[order(healthImpact$TOTAL, decreasing=TRUE),], 10)
+top10HealthImpacts
+```
+
+##### Impact on Economy
+
+In this we generate the top 10 weather events that resulted in high Property & Crop Damages
+
+```{r}
+# generate the top 10 economy impacting events
+economyImpact <- aggregate(cbind(PROPDMG, CROPDMG) ~ EVTYPE, stormData, sum, na.rm = TRUE)
+economyImpact$TOTAL <- with(economyImpact, PROPDMG+CROPDMG)
+top10EconomyImpacts <- head(economyImpact[order(economyImpact$TOTAL, decreasing=TRUE),], 10)
+top10EconomyImpacts
+```  
+
+#### Results
+
+In the following graph we plot the total number of Fatalities & Injuries against the weather events for the top 10 health impacting events
+
+```{r}
+library(ggplot2)
+g <- ggplot(top10HealthImpacts, aes(EVTYPE, TOTAL))
+g + geom_bar(stat = "identity") + coord_flip() + labs(x = "Event Type", 
+                                                      y = "Number of Fatalities+Injuries", 
+                                                      title = "Top 10 Population Impacting Weather Events")
+```  
+
+In the following graph we plot the total impact on the economy (in terms of total damage to Property & Crop) against the weather events for the top 10 economy impacting events
+
+```{r}
+# convert the economy impact amount to Billions for readability
+top10EconomyImpacts$TOTAL <- top10EconomyImpacts$TOTAL/1e9
+
+g <- ggplot(top10EconomyImpacts, aes(EVTYPE, TOTAL))
+g + geom_bar(stat = "identity") + coord_flip() + labs(x = "Event Type", 
+                                                      y = "Impact on Economy (in Billions USD)", 
+                                                      title = "Top 10 Economy Impacting Weather Events")
+```  
+
+Following are the summary of this analysis
+ 
+1. **Tornado** and  **excessive heat** are the primary reasons affecting the population health
+1. **Flood**, **hurricane**, **tornado**, and  **storm surge** are the primary reasons affecting the economy
